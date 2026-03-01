@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>請求マスター v4 — PDF AI読み取り・Drive自動保存</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --bg:#ffffff;--bg2:#f7f8fa;--bg3:#eef0f4;--bg4:#e4e7ed;
+  --border:#dde0e8;--border2:#c8ccd6;
+  --text:#2b2b2b;--text2:#5a6070;--text3:#9097a8;
+  --accent:#2563eb;--accent2:#1d4ed8;
+  --green:#16a065;--green-dim:#dcfaee;
+  --red:#e03355;--red-dim:#fde8ec;
+  --yellow:#b45309;--yellow-dim:#fef3cd;
+  --slack:#4a154b;--slack-l:#611f69;
+  --excel:#1e6f3e;--excel-l:#217346;
+  --drive:#1a73e8;--drive-l:#1557b0;
+  --dg:#0f9d58;--dg-l:#0b7a46;
+  --ai:#7c3aed;--ai-l:#6d28d9;--ai-dim:rgba(124,58,237,.08);
+  --font:'Noto Sans JP',sans-serif;--mono:'DM Mono',monospace;
+  --r:8px;--r2:12px;--shadow:0 2px 16px rgba(0,0,0,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+.app{display:flex;flex-direction:column;min-height:100vh}
+
+/* HEADER */
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;gap:16px;height:50px;position:sticky;top:0;z-index:100}
+.logo{font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.logo-dot{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.logo-v{font-size:9px;background:var(--ai);color:#fff;padding:1px 5px;border-radius:3px}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{background:none;border:none;cursor:pointer;padding:4px 10px;border-radius:var(--r);color:var(--text2);font-family:var(--font);font-size:11px;transition:all .15s;white-space:nowrap}
+nav button:hover{background:var(--bg3);color:var(--text)}
+nav button.active{background:var(--bg3);color:var(--accent);font-weight:600}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:5px;flex-shrink:0}
+.badge-alert{background:var(--red-dim);color:var(--red);border:1px solid var(--red);border-radius:20px;padding:2px 7px;font-size:10px;font-weight:600;display:flex;align-items:center;gap:3px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.badge-intg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:9px;font-weight:700;border:1px solid;white-space:nowrap}
+.bi-off{background:var(--bg3);color:var(--text3);border-color:var(--border)}
+.bi-slack{background:var(--slack);color:#fff;border-color:var(--slack-l)}
+.bi-drive{background:rgba(26,115,232,.2);color:var(--drive);border-color:var(--drive)}
+.bi-ai{background:var(--ai-dim);color:var(--ai);border-color:var(--ai)}
+
+/* LAYOUT */
+main{flex:1;padding:16px;max-width:1280px;margin:0 auto;width:100%}
+.page{display:none}.page.active{display:block}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:14px;margin-bottom:11px}
+.card-title{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;margin-bottom:11px;display:flex;align-items:center;gap:5px}
+
+/* STATS */
+.stats-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:11px 13px}
+.stat-label{font-size:9px;color:var(--text3);letter-spacing:.07em;text-transform:uppercase}
+.stat-value{font-family:var(--mono);font-size:18px;font-weight:500;margin-top:3px}
+.sv-blue{color:var(--accent)}.sv-green{color:var(--green)}.sv-yellow{color:var(--yellow)}.sv-red{color:var(--red)}.sv-ai{color:var(--ai)}
+
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.fg-full{grid-column:1/-1}
+label{font-size:10px;color:var(--text2);font-weight:600}
+label .req{color:var(--red);margin-left:2px}
+input,select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:6px 10px;color:var(--text);font-family:var(--font);font-size:12px;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input[readonly]{background:var(--bg);color:var(--text2);cursor:not-allowed;border-color:var(--border)}
+.inp-locked{position:relative}
+.inp-locked::after{content:'🔒';position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:9px;pointer-events:none}
+textarea{resize:vertical;min-height:52px}
+
+/* BUTTONS */
+.btn{border:none;cursor:pointer;font-family:var(--font);border-radius:var(--r);padding:6px 13px;font-size:11px;font-weight:600;transition:all .15s;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent2)}
+.btn-secondary{background:var(--bg3);color:var(--text);border:1px solid var(--border2)}.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.btn-success{background:var(--green-dim);color:var(--green);border:1px solid var(--green)}.btn-success:hover{background:var(--green);color:#0f1117}
+.btn-slack{background:var(--slack);color:#fff}.btn-slack:hover{background:var(--slack-l)}
+.btn-excel{background:var(--excel);color:#fff}.btn-excel:hover{background:var(--excel-l)}
+.btn-drive{background:var(--drive);color:#fff}.btn-drive:hover{background:var(--drive-l)}
+.btn-dg{background:var(--dg);color:#fff}.btn-dg:hover{background:var(--dg-l)}
+.btn-ai{background:var(--ai);color:#fff}.btn-ai:hover{background:var(--ai-l)}
+.btn-sm{padding:3px 8px;font-size:10px}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:6px 9px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border)}
+td{padding:6px 9px;border-bottom:1px solid var(--border);font-size:11px}
+tr:hover td{background:rgba(79,142,255,.025)}
+.mono{font-family:var(--mono)}
+
+/* CHIPS */
+.chip{display:inline-flex;align-items:center;gap:2px;border-radius:20px;padding:2px 7px;font-size:9px;font-weight:700}
+.ch-g{background:var(--green-dim);color:var(--green)}
+.ch-y{background:var(--yellow-dim);color:var(--yellow)}
+.ch-r{background:var(--red-dim);color:var(--red)}
+.ch-b{background:rgba(79,142,255,.15);color:var(--accent)}
+.ch-gray{background:var(--bg3);color:var(--text3)}
+.ch-slack{background:var(--slack);color:#fff}
+.ch-drive{background:rgba(26,115,232,.18);color:var(--drive)}
+.ch-ai{background:var(--ai-dim);color:var(--ai)}
+
+/* ALERTS */
+.al-err{background:var(--red-dim);border:1px solid var(--red);border-radius:var(--r);padding:8px 11px;font-size:11px;color:var(--red);display:flex;align-items:center;gap:6px}
+.al-ok{background:var(--green-dim);border:1px solid var(--green);border-radius:var(--r);padding:8px 11px;font-size:11px;color:var(--green);display:flex;align-items:center;gap:6px}
+.al-ai{background:var(--ai-dim);border:1px solid var(--ai);border-radius:var(--r);padding:8px 11px;font-size:11px;color:var(--ai);display:flex;align-items:center;gap:6px;margin-bottom:9px}
+.al-info{background:rgba(26,115,232,.1);border:1px solid var(--drive);border-radius:var(--r);padding:8px 11px;font-size:11px;color:var(--drive);margin-bottom:9px}
+
+/* SECTION HEADER */
+.sec-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:11px;gap:8px;flex-wrap:wrap}
+.sec-title{font-size:14px;font-weight:700}
+.sec-sub{font-size:10px;color:var(--text3);margin-top:2px}
+.btn-row{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;z-index:200;padding:12px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r2);padding:18px;width:100%;box-shadow:var(--shadow);transform:translateY(16px);transition:transform .2s;max-height:94vh;overflow-y:auto}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:13px;font-weight:700;margin-bottom:11px}
+
+/* ═══════════ PDF VIEWER ═══════════ */
+.pdf-viewer-layout{display:grid;grid-template-columns:1fr 380px;gap:12px;min-height:600px}
+.pdf-canvas-area{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;display:flex;flex-direction:column}
+.pdf-canvas-toolbar{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--bg4);flex-shrink:0}
+.pdf-canvas-wrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:16px;background:repeating-conic-gradient(#e8eaee 0% 25%, #f0f1f4 0% 50%) 0 0/20px 20px}
+.pdf-canvas-wrap canvas{box-shadow:0 4px 20px rgba(0,0,0,.5);border-radius:2px}
+.pdf-canvas-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;gap:10px}
+.pdf-canvas-empty .ico{font-size:40px}
+
+.pdf-side-panel{display:flex;flex-direction:column;gap:10px}
+
+/* AI RESULT */
+.ai-result-card{background:var(--bg3);border:1px solid var(--ai);border-radius:var(--r2);padding:13px;position:relative;overflow:hidden}
+.ai-result-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,var(--ai-dim),transparent 60%);pointer-events:none}
+.ai-label{font-size:9px;font-weight:700;color:var(--ai);letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px}
+.ai-field{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.ai-field-lbl{font-size:9px;color:var(--text3);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.ai-field-val{font-size:12px;color:var(--text);background:var(--bg4);border-radius:5px;padding:4px 8px;font-family:var(--mono)}
+.ai-field-val.highlight{color:var(--accent);font-size:14px;font-weight:700}
+.ai-field-val.editable{border:1px solid var(--border2);cursor:text}
+.ai-field-val.editable:focus{outline:none;border-color:var(--accent)}
+.ai-field-val[contenteditable="true"]{border:1px solid var(--border2);cursor:text}
+.ai-field-val[contenteditable="true"]:focus{outline:none;border-color:var(--accent)}
+
+/* AI ITEMS TABLE */
+.ai-items{width:100%;border-collapse:collapse;font-size:10px;margin-top:4px}
+.ai-items th{background:var(--bg4);padding:4px 6px;text-align:left;color:var(--text3);font-size:9px}
+.ai-items td{padding:4px 6px;border-bottom:1px solid var(--border);color:var(--text2)}
+
+/* LOADING OVERLAY */
+.ai-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;gap:10px}
+.ai-spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--ai);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-loading-text{font-size:12px;color:var(--text2)}
+.ai-loading-sub{font-size:10px;color:var(--text3)}
+
+/* DROP ZONE */
+.pdf-drop-zone{border:2px dashed var(--border2);border-radius:var(--r2);padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg3)}
+.pdf-drop-zone:hover,.pdf-drop-zone.drag{border-color:var(--drive);background:rgba(26,115,232,.05)}
+.pdf-drop-icon{font-size:32px;margin-bottom:8px}
+.pdf-drop-text{font-size:12px;color:var(--text2)}
+.pdf-drop-sub{font-size:10px;color:var(--text3);margin-top:3px}
+
+/* PDF LIST ITEM */
+.pdf-list-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:7px;cursor:pointer;transition:border-color .15s}
+.pdf-list-item:hover{border-color:var(--accent)}
+.pdf-list-item.active{border-color:var(--accent);background:rgba(79,142,255,.06)}
+.pli-icon{font-size:20px;flex-shrink:0}
+.pli-info{flex:1;min-width:0}
+.pli-name{font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pli-meta{font-size:9px;color:var(--text3);margin-top:2px}
+.pli-chips{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.pli-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+
+/* LINK SECTION */
+.link-section{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:13px}
+.link-title{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:9px}
+.link-match{background:var(--green-dim);border:1px solid var(--green);border-radius:var(--r);padding:8px 10px;font-size:11px;color:var(--green);margin-bottom:7px;display:flex;align-items:center;gap:6px}
+.link-nodata{font-size:11px;color:var(--text3);text-align:center;padding:16px 0}
+
+/* DRIVE PANEL */
+.drive-status-bar{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--r);border:1px solid var(--border);background:var(--bg3);margin-bottom:11px}
+.drive-log{background:var(--bg3);border-radius:var(--r);padding:9px 10px;font-size:10px;font-family:var(--mono);color:var(--text2);max-height:130px;overflow-y:auto;margin-top:7px;line-height:1.9}
+.drive-log-e{display:flex;gap:7px}
+.dl-t{color:var(--text3);flex-shrink:0}.dl-ok{color:var(--green)}.dl-err{color:var(--red)}.dl-inf{color:var(--drive)}
+.prog-bar{height:3px;background:var(--border);border-radius:2px;margin-top:5px;overflow:hidden}
+.prog-fill{height:100%;background:var(--drive);border-radius:2px;transition:width .4s}
+
+/* SETTINGS */
+.set-blk{background:var(--bg3);border-radius:var(--r);padding:12px;margin-bottom:9px}
+.set-blk-title{font-size:9px;font-weight:700;color:var(--text2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.inp-row{display:flex;gap:6px}.inp-row input{flex:1}
+.st-line{font-size:10px;margin-top:4px}
+
+/* CONFIRM */
+.conf-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.conf-info{flex:1;min-width:0}
+.conf-title{font-size:12px;font-weight:500}
+.conf-meta{font-size:10px;color:var(--text2);margin-top:2px}
+.conf-amt{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:600;white-space:nowrap}
+
+/* INV PREVIEW */
+.inv-wrap{background:#fff;color:#111;border-radius:var(--r);padding:20px 24px;font-size:11px;line-height:1.6}
+.inv-head{display:flex;justify-content:space-between;margin-bottom:14px}
+.inv-ttl{font-size:18px;font-weight:700;color:#1a1a2e}
+.inv-meta-r{text-align:right;font-size:9px;color:#666}
+.inv-tbl{width:100%;border-collapse:collapse;margin:8px 0}
+.inv-tbl th{background:#f0f4ff;padding:5px 7px;text-align:left;font-size:9px;color:#555}
+.inv-tbl td{padding:5px 7px;border-bottom:1px solid #eee;font-size:9px}
+.inv-totals{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-top:7px}
+.inv-tot-row{display:flex;gap:16px;font-size:9px;color:#666}
+.inv-tot-final{display:flex;gap:16px;font-size:13px;font-weight:700;color:#1a1a2e;margin-top:3px}
+.inv-foot{margin-top:12px;padding:6px;background:#f8f8f8;border-radius:3px;font-size:9px;color:#888}
+
+/* HISTORY */
+.hist-item{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)}
+.hist-dot{width:6px;height:6px;border-radius:50%;margin-top:3px;flex-shrink:0}
+.hist-content{flex:1}
+.hist-action{font-size:11px}
+.hist-detail{font-size:10px;color:var(--text2);margin-top:2px}
+.hist-time{font-family:var(--mono);font-size:9px;color:var(--text3);white-space:nowrap}
+
+/* TOAST */
+.toast-container{position:fixed;bottom:16px;right:16px;z-index:300;display:flex;flex-direction:column;gap:5px}
+.toast{background:var(--bg2);border:1px solid var(--border2);border-left-width:3px;border-radius:var(--r);padding:8px 13px;font-size:11px;color:var(--text);box-shadow:var(--shadow);display:flex;align-items:center;gap:6px;max-width:280px;animation:sIn .25s ease,fOut .3s ease 2.7s forwards}
+@keyframes sIn{from{transform:translateX(14px);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes fOut{from{opacity:1}to{opacity:0}}
+
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0}
+.empty-state{text-align:center;padding:28px;color:var(--text3);font-size:11px}
+.empty-state .ico{font-size:24px;margin-bottom:5px}
+
+/* TAB */
+.tab-bar{display:flex;gap:2px;background:var(--bg3);border-radius:var(--r);padding:3px;margin-bottom:12px}
+.tab-btn{flex:1;background:none;border:none;cursor:pointer;padding:5px 10px;border-radius:6px;color:var(--text2);font-family:var(--font);font-size:11px;font-weight:500;transition:all .15s}
+.tab-btn.active{background:var(--bg2);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.tab-content{display:none}.tab-content.active{display:block}
+
+@media(max-width:900px){.pdf-viewer-layout{grid-template-columns:1fr}}
+@media(max-width:768px){.stats-row{grid-template-columns:repeat(3,1fr)}.form-grid{grid-template-columns:1fr}.fg-full{grid-column:1}.conf-card{flex-direction:column}}
+/* BACK BUTTON */
+.btn-back{background:none;border:1px solid var(--border2);cursor:pointer;font-family:var(--font);border-radius:var(--r);padding:4px 10px;font-size:11px;font-weight:500;color:var(--text2);display:none;align-items:center;gap:4px;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.btn-back:hover{border-color:var(--accent);color:var(--accent);background:rgba(79,142,255,.06)}
+.btn-back.visible{display:flex}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <button class="btn-back" id="btn-back" onclick="goPage('dashboard')">← ダッシュボード</button>
+  <div class="logo"><div class="logo-dot"></div>請求マスター<span class="logo-v">v4</span></div>
+  <nav>
+    <button class="active" onclick="goPage('dashboard')">ダッシュボード</button>
+    <button onclick="goPage('order')">案1：受注登録</button>
+    <button onclick="goPage('check')">案2：金額突合</button>
+    <button onclick="goPage('confirm')">案3：Slack確認</button>
+    <button onclick="goPage('pdf')">📄 PDF取込</button>
+    <button onclick="goPage('drive')">☁ Drive</button>
+    <button onclick="goPage('history')">ログ</button>
+    <button onclick="goPage('settings')">⚙ 設定</button>
+  </nav>
+  <div class="hdr-right">
+    <div id="badge-ai" class="badge-intg bi-off">AI 未設定</div>
+    <div id="badge-drive" class="badge-intg bi-off">Drive 未接続</div>
+    <div id="badge-slack" class="badge-intg bi-off">Slack 未設定</div>
+    <div class="badge-alert" id="badge-alert" style="display:none">⚠ <span id="alert-count">0</span></div>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══════════ DASHBOARD ═══════════ -->
+<div class="page active" id="page-dashboard">
+  <div class="sec-hdr">
+    <div><div class="sec-title">受注・請求 一元管理</div><div class="sec-sub">案1〜3 + PDF AI読み取り + Google Drive 自動保存 統合ツール</div></div>
+    <div class="btn-row">
+      <button class="btn btn-excel" onclick="exportMasterExcel()">📊 台帳出力</button>
+      <button class="btn btn-primary" onclick="goPage('order')">＋ 受注登録</button>
+    </div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-label">今月受注</div><div class="stat-value sv-blue" id="st-orders">0</div></div>
+    <div class="stat-card"><div class="stat-label">請求済</div><div class="stat-value sv-green" id="st-invoiced">0</div></div>
+    <div class="stat-card"><div class="stat-label">未請求</div><div class="stat-value sv-yellow" id="st-pending">0</div></div>
+    <div class="stat-card"><div class="stat-label">差分アラート</div><div class="stat-value sv-red" id="st-diff">0</div></div>
+    <div class="stat-card"><div class="stat-label">PDF取込済</div><div class="stat-value sv-ai" id="st-pdf">0</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+    <div class="card" style="border-top:3px solid var(--accent);cursor:pointer" onclick="goPage('order')">
+      <div style="font-size:9px;color:var(--accent);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">案1</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:3px">受注一元化</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.5">登録→金額ロック→全データ自動生成→Drive保存</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--yellow);cursor:pointer" onclick="goPage('check')">
+      <div style="font-size:9px;color:var(--yellow);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">案2</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:3px">差分アラート</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.5">1円ズレも即検出。修正履歴を全記録</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--green);cursor:pointer" onclick="goPage('confirm')">
+      <div style="font-size:9px;color:var(--green);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">案3</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:3px">Slack確認ログ</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.5">Webhook通知→確認済ボタンで責任所在記録</div>
+    </div>
+    <div class="card" style="border-top:3px solid var(--ai);cursor:pointer" onclick="goPage('pdf')">
+      <div style="font-size:9px;color:var(--ai);font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">NEW</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:3px">PDF AI読み取り</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.5">取引先・金額・明細を全自動抽出→Drive保存</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">受注一覧 <span id="order-count-lbl">（0件）</span></div>
+    <div class="tbl-wrap">
+      <table><thead><tr>
+        <th>受注ID</th><th>取引先</th><th>件名</th>
+        <th>受注額(税抜)</th><th>税込</th>
+        <th>差分</th><th>Slack</th><th>状態</th><th>Drive</th><th>操作</th>
+      </tr></thead>
+      <tbody id="order-tbody">
+        <tr><td colspan="10" class="empty-state"><div class="ico">📋</div>受注データがありません</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ ORDER ═══════════ -->
+<div class="page" id="page-order">
+  <div class="sec-hdr">
+    <div><div class="sec-title">案1｜受注マスター一元化</div><div class="sec-sub">登録と同時に請求書・Excel・会計CSV・Google Driveを自動生成</div></div>
+    <button class="btn btn-secondary" onclick="goPage('dashboard')">← 一覧へ</button>
+  </div>
+  <div class="card">
+    <div class="form-grid">
+      <div class="form-group"><label>取引先名 <span class="req">*</span></label><input id="f-client" placeholder="例：株式会社サンプル"></div>
+      <div class="form-group"><label>担当営業名 <span class="req">*</span></label><input id="f-sales" placeholder="例：田中 太郎"></div>
+      <div class="form-group fg-full"><label>件名 <span class="req">*</span></label><input id="f-subject" placeholder="例：Webサイト制作 フェーズ1"></div>
+      <div class="form-group"><label>受注金額（税抜）<span class="req">*</span></label><input type="number" id="f-amount" placeholder="500000" oninput="calcTax()"></div>
+      <div class="form-group"><label>消費税率</label><select id="f-taxrate" onchange="calcTax()"><option value="10">10%</option><option value="8">8%（軽減）</option><option value="0">0%</option></select></div>
+      <div class="form-group"><label>税込金額（自動・ロック）</label><div class="inp-locked"><input id="f-taxed" readonly></div></div>
+      <div class="form-group"><label>値引き（税抜）</label><input type="number" id="f-discount" placeholder="0" oninput="calcTax()"></div>
+      <div class="form-group"><label>値引き有無</label><select id="f-disc-flag" onchange="toggleDiscReason()"><option value="none">なし</option><option value="yes">あり</option></select></div>
+      <div class="form-group fg-full" id="disc-reason-wrap" style="display:none">
+        <label>値引き理由 <span class="req">*（承認番号・稟議番号を必ず記入）</span></label>
+        <textarea id="f-disc-reason" placeholder="例：部長承認済 INQ-2024-089"></textarea>
+      </div>
+      <div class="form-group"><label>請求予定日 <span class="req">*</span></label><input type="date" id="f-due"></div>
+      <div class="form-group"><label>入金期日</label><input type="date" id="f-payment"></div>
+      <div class="form-group fg-full"><label>備考</label><textarea id="f-note" placeholder="特記事項があれば記入"></textarea></div>
+    </div>
+    <div id="order-validation" style="margin-top:8px"></div>
+    <hr class="divider">
+    <div style="display:flex;gap:6px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="clearForm()">クリア</button>
+      <button class="btn btn-primary" onclick="registerOrder()">✓ 受注登録（全データ自動生成）</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ CHECK ═══════════ -->
+<div class="page" id="page-check">
+  <div class="sec-hdr">
+    <div><div class="sec-title">案2｜差分自動アラート</div><div class="sec-sub">受注マスター vs 請求入力を照合。不一致のみ警告・全履歴保存</div></div>
+  </div>
+  <div class="card">
+    <div class="form-grid">
+      <div class="form-group"><label>対象受注</label><select id="chk-order-id" onchange="loadForCheck()"><option value="">— 選択 —</option></select></div>
+      <div class="form-group"><label>請求書入力金額（税抜）</label><input type="number" id="chk-inv-amt" placeholder="入力" oninput="runDiff()"></div>
+      <div class="form-group"><label>マスター金額（税抜）<span style="color:var(--accent);font-size:9px;margin-left:3px">ロック</span></label><div class="inp-locked"><input id="chk-master" readonly></div></div>
+      <div class="form-group"><label>税率</label><div class="inp-locked"><input id="chk-taxrate" readonly></div></div>
+    </div>
+    <div id="diff-result" style="margin-top:8px"></div>
+    <div id="diff-tax" style="margin-top:5px;font-size:10px;color:var(--text2)"></div>
+  </div>
+  <div class="card"><div class="card-title">修正履歴ログ</div><div id="diff-log"></div></div>
+</div>
+
+<!-- ═══════════ CONFIRM ═══════════ -->
+<div class="page" id="page-confirm">
+  <div class="sec-hdr">
+    <div><div class="sec-title">案3｜Slack 営業確認ログ</div><div class="sec-sub">Webhook通知→確認済で責任所在を構造化記録</div></div>
+    <button class="btn btn-slack" onclick="sendAllConfirm()">📤 未確認を一括送信</button>
+  </div>
+  <div id="slack-warning" style="display:none" class="card"><div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--yellow)">⚠ Webhook URLが未設定 <button class="btn btn-secondary btn-sm" onclick="goPage('settings')">⚙ 設定</button></div></div>
+  <div id="confirm-list"><div class="empty-state"><div class="ico">✉️</div>受注登録後に表示されます</div></div>
+</div>
+
+<!-- ═══════════ PDF ═══════════ -->
+<div class="page" id="page-pdf">
+  <div class="sec-hdr">
+    <div><div class="sec-title">📄 PDF取込 — お客様請求書</div><div class="sec-sub">ドラッグ&ドロップ → ページプレビュー表示 → AI全項目読み取り → 受注紐付け → Drive自動保存</div></div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('upload')">📤 アップロード</button>
+    <button class="tab-btn" onclick="switchTab('viewer')">🔍 ビューア</button>
+    <button class="tab-btn" onclick="switchTab('list')">📋 取込済一覧</button>
+  </div>
+
+  <!-- UPLOAD TAB -->
+  <div class="tab-content active" id="pdftab-upload">
+    <div class="card">
+      <div class="pdf-drop-zone" id="pdf-drop" onclick="document.getElementById('pdf-file-input').click()"
+           ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="pdf-drop-icon">📄</div>
+        <div class="pdf-drop-text">クリックまたはドラッグ&ドロップでPDFを取込</div>
+        <div class="pdf-drop-sub">お客様からの請求書PDFをここへ（複数可・スキャンPDF対応）</div>
+      </div>
+      <input type="file" id="pdf-file-input" accept=".pdf" multiple style="display:none" onchange="handlePdfFiles(this.files)">
+    </div>
+    <div id="pdf-upload-queue"></div>
+  </div>
+
+  <!-- VIEWER TAB -->
+  <div class="tab-content" id="pdftab-viewer">
+    <div id="pdf-viewer-area">
+      <div class="card"><div class="pdf-canvas-empty"><div class="ico">📂</div>左の「取込済一覧」からPDFを選択してください</div></div>
+    </div>
+  </div>
+
+  <!-- LIST TAB -->
+  <div class="tab-content" id="pdftab-list">
+    <div class="card">
+      <div class="card-title">取込済PDFリスト</div>
+      <div id="pdf-saved-list"><div class="empty-state"><div class="ico">📂</div>取込済PDFがありません</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ DRIVE ═══════════ -->
+<div class="page" id="page-drive">
+  <div class="sec-hdr">
+    <div><div class="sec-title">☁ Google Drive 自動保存</div><div class="sec-sub">Excel台帳・請求書・お客様PDFをフォルダ別に自動整理</div></div>
+    <div class="btn-row">
+      <button class="btn btn-drive" onclick="connectDrive()">Google Driveに接続</button>
+      <button class="btn btn-dg" id="btn-sync-all" onclick="syncAll()" disabled>☁ 全件同期</button>
+    </div>
+  </div>
+  <div class="drive-status-bar">
+    <div style="font-size:18px">☁</div>
+    <div style="flex:1">
+      <div id="drive-status-txt" style="font-size:12px;color:var(--text3)">未接続 — Google Driveに接続してください</div>
+      <div id="drive-folder-txt" style="font-size:10px;color:var(--text3);font-family:var(--mono)"></div>
+    </div>
+    <div id="drive-user-txt" style="font-size:10px;color:var(--text2)"></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+    <div class="card">
+      <div class="card-title">📁 フォルダ構成（自動作成）</div>
+      <div style="font-size:11px;color:var(--text2);line-height:2.1">
+        📁 請求マスター/<br>
+        &nbsp;&nbsp;📁 受注管理台帳/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└ 受注台帳_YYYY-MM.xlsx<br>
+        &nbsp;&nbsp;📁 発行請求書/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└ 請求書_RCV-XXXX.xlsx<br>
+        &nbsp;&nbsp;📁 受領PDF/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;└ [取引先]_請求書_YYYYMMDD.pdf
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">保存ステータス</div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>種別</th><th>件数</th><th>状態</th></tr></thead>
+        <tbody id="drive-stats-body"><tr><td colspan="3" style="text-align:center;color:var(--text3);font-size:10px;padding:10px">接続後に表示</td></tr></tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-drive btn-sm" id="btn-save-excel" onclick="saveMasterToDrive()" disabled>台帳保存</button>
+        <button class="btn btn-drive btn-sm" id="btn-save-csv" onclick="saveAccountingToDrive()" disabled>会計CSV保存</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">保存ログ</div>
+    <div class="drive-log" id="drive-log"><div class="drive-log-e"><span class="dl-inf">— Driveに接続するとログが表示されます —</span></div></div>
+    <div class="prog-bar"><div class="prog-fill" id="drive-prog" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════ HISTORY ═══════════ -->
+<div class="page" id="page-history">
+  <div class="sec-hdr">
+    <div><div class="sec-title">操作・変更ログ</div></div>
+    <button class="btn btn-excel btn-sm" onclick="exportLogCSV()">↓ Excel</button>
+  </div>
+  <div class="card"><div id="history-list"><div class="empty-state"><div class="ico">📜</div>ログがありません</div></div></div>
+</div>
+
+<!-- ═══════════ SETTINGS ═══════════ -->
+<div class="page" id="page-settings">
+  <div class="sec-hdr"><div><div class="sec-title">設定</div></div></div>
+
+  <!-- AI KEY -->
+  <div class="card">
+    <div class="card-title">🤖 Claude AI設定（PDF読み取りに使用）</div>
+    <div class="al-ai">⚠ APIキーはブラウザのローカルストレージに保存されます。共有PCでの使用はご注意ください。</div>
+    <div class="set-blk">
+      <div class="set-blk-title">Anthropic API Key</div>
+      <div class="inp-row">
+        <input type="password" id="ai-key" placeholder="sk-ant-..." style="font-family:var(--mono);font-size:11px">
+        <button class="btn btn-ai btn-sm" onclick="saveAIKey()">保存</button>
+        <button class="btn btn-secondary btn-sm" onclick="testAI()">🧪 テスト</button>
+      </div>
+      <div class="st-line" id="ai-status"></div>
+      <div style="margin-top:7px;font-size:10px;color:var(--text3);line-height:1.8">
+        📌 取得：<a href="https://console.anthropic.com/" target="_blank" style="color:var(--ai)">console.anthropic.com</a> → APIキー → 新規作成<br>
+        📌 使用モデル：claude-sonnet-4-20250514（画像読み取り対応）<br>
+        📌 読み取り項目：取引先名・請求金額（税込）・発行日 の3項目
+      </div>
+    </div>
+  </div>
+
+  <!-- SLACK -->
+  <div class="card">
+    <div class="card-title">🟣 Slack Incoming Webhook</div>
+    <div class="set-blk">
+      <div class="set-blk-title">Webhook URL</div>
+      <div class="inp-row">
+        <input type="password" id="slack-url" placeholder="https://hooks.slack.com/services/..." style="font-family:var(--mono);font-size:11px">
+        <button class="btn btn-slack btn-sm" onclick="saveWebhook()">保存</button>
+        <button class="btn btn-secondary btn-sm" onclick="testWebhook()">🧪 テスト</button>
+      </div>
+      <div class="st-line" id="slack-status"></div>
+    </div>
+  </div>
+
+  <!-- DRIVE -->
+  <div class="card">
+    <div class="card-title">☁ Google Drive 認証</div>
+    <div class="set-blk">
+      <div class="set-blk-title">Google OAuth Client ID</div>
+      <div class="form-grid">
+        <div class="form-group"><label>Client ID</label><input id="g-client-id" placeholder="xxxxx.apps.googleusercontent.com" style="font-size:10px;font-family:var(--mono)"></div>
+        <div class="form-group"><label>保存先フォルダ名</label><input id="g-folder" placeholder="請求マスター" value="請求マスター"></div>
+      </div>
+      <div style="margin-top:7px;display:flex;gap:6px">
+        <button class="btn btn-drive btn-sm" onclick="saveGConf()">保存</button>
+        <button class="btn btn-drive btn-sm" onclick="connectDrive()">接続テスト</button>
+      </div>
+      <div class="st-line" id="drive-conf-status"></div>
+      <div style="margin-top:7px;font-size:10px;color:var(--text3);line-height:1.9">
+        📌 Google Cloud Console → Drive API有効化 → OAuthクライアントID（Web）作成 → 承認済みオリジンにこのページURLを追加
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPANY -->
+  <div class="card">
+    <div class="card-title">🏢 会社情報</div>
+    <div class="form-grid">
+      <div class="form-group"><label>会社名</label><input id="conf-company" placeholder="株式会社〇〇"></div>
+      <div class="form-group"><label>担当部署</label><input id="conf-dept" placeholder="経理部"></div>
+      <div class="form-group"><label>銀行口座</label><input id="conf-bank" placeholder="〇〇銀行 普通 1234567"></div>
+      <div class="form-group"><label>連絡先</label><input id="conf-email" placeholder="billing@example.com"></div>
+    </div>
+    <div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="saveCompanyConf()">保存</button></div>
+  </div>
+</div>
+
+</main>
+</div>
+
+<!-- INVOICE MODAL -->
+<div class="modal-overlay" id="modal-invoice">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">請求書プレビュー</div>
+    <div id="invoice-content"></div>
+    <hr class="divider">
+    <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn btn-secondary" onclick="closeModal('modal-invoice')">閉じる</button>
+      <button class="btn btn-drive" onclick="saveInvoiceToDrive()">☁ Driveに保存</button>
+      <button class="btn btn-excel" onclick="exportInvoiceExcel()">📊 Excel</button>
+      <button class="btn btn-primary" onclick="window.print()">↓ PDF</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ════════════════════════════════════
+// STATE
+// ════════════════════════════════════
+let orders   = JSON.parse(localStorage.getItem('im4_orders') || '[]');
+let logs     = JSON.parse(localStorage.getItem('im4_logs')   || '[]');
+let diffLogs = JSON.parse(localStorage.getItem('im4_dlogs')  || '[]');
+let pdfMeta  = JSON.parse(localStorage.getItem('im4_pdfs')   || '[]');
+let driveLogs= JSON.parse(localStorage.getItem('im4_dlive')  || '[]');
+let idSeq    = parseInt(localStorage.getItem('im4_seq')      || '1000');
+let conf     = JSON.parse(localStorage.getItem('im4_conf')   || '{"company":"株式会社〇〇","dept":"経理部","bank":"〇〇銀行 普通 1234567","email":"billing@example.com"}');
+const pdfBlobs = {};           // session-only blob store
+let currentInvId   = null;
+let currentPdfId   = null;
+let driveToken     = null;
+let driveFolderId  = null;
+let currentPdfDoc  = null;    // PDF.js document object
+let currentPage    = 1;
+
+function save() {
+  localStorage.setItem('im4_orders', JSON.stringify(orders));
+  localStorage.setItem('im4_logs',   JSON.stringify(logs));
+  localStorage.setItem('im4_dlogs',  JSON.stringify(diffLogs));
+  localStorage.setItem('im4_pdfs',   JSON.stringify(pdfMeta.map(p => ({...p, blob: undefined}))));
+  localStorage.setItem('im4_dlive',  JSON.stringify(driveLogs));
+  localStorage.setItem('im4_seq',    idSeq);
+}
+
+// ════════════════════════════════════
+// NAV
+// ════════════════════════════════════
+function goPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const pages = ['dashboard','order','check','confirm','pdf','drive','history','settings'];
+  document.querySelectorAll('nav button').forEach((b,i) => b.classList.toggle('active', pages[i] === id));
+  // 戻るボタン：ダッシュボード以外で表示
+  const backBtn = document.getElementById('btn-back');
+  backBtn.classList.toggle('visible', id !== 'dashboard');
+  if(id==='dashboard') renderDashboard();
+  if(id==='check')     renderCheckSelects();
+  if(id==='confirm')   renderConfirmList();
+  if(id==='pdf')       renderPdfList();
+  if(id==='drive')     renderDrivePage();
+  if(id==='history')   renderHistory();
+  if(id==='settings')  loadSettings();
+}
+function switchTab(t) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['upload','viewer','list'][i] === t));
+  document.querySelectorAll('.tab-content').forEach((c,i) => c.classList.toggle('active', ['upload','viewer','list'][i] === t));
+  if(t==='list') renderPdfList();
+}
+
+// ════════════════════════════════════
+// FORM
+// ════════════════════════════════════
+function calcTax() {
+  const amt = parseFloat(document.getElementById('f-amount').value)||0;
+  const disc= parseFloat(document.getElementById('f-discount').value)||0;
+  const rate= parseInt(document.getElementById('f-taxrate').value)||10;
+  const net = amt - disc, tax = Math.round(net * rate / 100);
+  document.getElementById('f-taxed').value = (net+tax) > 0 ? fmtY(net+tax) : '';
+}
+function toggleDiscReason() {
+  document.getElementById('disc-reason-wrap').style.display =
+    document.getElementById('f-disc-flag').value === 'yes' ? 'block' : 'none';
+}
+
+// ════════════════════════════════════
+// REGISTER ORDER
+// ════════════════════════════════════
+function registerOrder() {
+  const client  = document.getElementById('f-client').value.trim();
+  const sales   = document.getElementById('f-sales').value.trim();
+  const subject = document.getElementById('f-subject').value.trim();
+  const amount  = parseFloat(document.getElementById('f-amount').value);
+  const taxrate = parseInt(document.getElementById('f-taxrate').value);
+  const discount= parseFloat(document.getElementById('f-discount').value)||0;
+  const discFlag= document.getElementById('f-disc-flag').value;
+  const discReason = document.getElementById('f-disc-reason').value.trim();
+  const dueDate = document.getElementById('f-due').value;
+  const errs = [];
+  if(!client)  errs.push('取引先名');
+  if(!sales)   errs.push('担当営業名');
+  if(!subject) errs.push('件名');
+  if(!amount||amount<=0) errs.push('受注金額');
+  if(!dueDate) errs.push('請求予定日');
+  if(discFlag==='yes'&&!discReason) errs.push('値引き理由');
+  const vel = document.getElementById('order-validation');
+  if(errs.length){vel.innerHTML=`<div class="al-err">⚠ 未入力：${errs.join('、')}</div>`;return;}
+  vel.innerHTML='';
+  const net = amount - discount, tax = Math.round(net*taxrate/100), taxed = net + tax;
+  const id = 'RCV-' + (++idSeq);
+  const o = {id,client,sales,subject,amount,discount,discFlag,discReason,taxrate,net,tax,taxed,
+    dueDate, payment: document.getElementById('f-payment').value,
+    note: document.getElementById('f-note').value,
+    status:'pending', salesConfirm:'waiting', salesConfirmAt:null,
+    invoiceAmount:null, diffChecked:false, driveSaved:false, driveFileId:null,
+    createdAt: new Date().toISOString()
+  };
+  orders.push(o);
+  addLog('register', `受注登録：${client}「${subject}」${fmtY(taxed)}`, id, 'green');
+  save();
+  if(driveToken) autoSaveOrderToDrive(o);
+  toast('✅ 受注登録完了', 'green');
+  clearForm(); goPage('dashboard');
+}
+function clearForm() {
+  ['f-client','f-sales','f-subject','f-amount','f-discount','f-due','f-payment','f-note','f-disc-reason'].forEach(i => document.getElementById(i).value = '');
+  document.getElementById('f-taxrate').value = '10';
+  document.getElementById('f-disc-flag').value = 'none';
+  document.getElementById('f-taxed').value = '';
+  document.getElementById('disc-reason-wrap').style.display = 'none';
+  document.getElementById('order-validation').innerHTML = '';
+}
+
+// ════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════
+function renderDashboard() {
+  const m = new Date().toISOString().slice(0,7);
+  document.getElementById('st-orders').textContent   = orders.filter(o=>o.createdAt.startsWith(m)).length;
+  document.getElementById('st-invoiced').textContent = orders.filter(o=>o.status==='invoiced').length;
+  document.getElementById('st-pending').textContent  = orders.filter(o=>o.status==='pending').length;
+  document.getElementById('st-diff').textContent     = orders.filter(o=>o.invoiceAmount!==null&&Math.abs(o.invoiceAmount-o.net)>0).length;
+  document.getElementById('st-pdf').textContent      = pdfMeta.length;
+  document.getElementById('order-count-lbl').textContent = `（${orders.length}件）`;
+  const diffs = orders.filter(o=>o.invoiceAmount!==null&&Math.abs(o.invoiceAmount-o.net)>0).length;
+  const ab = document.getElementById('badge-alert');
+  ab.style.display = diffs ? 'flex' : 'none';
+  if(diffs) document.getElementById('alert-count').textContent = diffs;
+  const tbody = document.getElementById('order-tbody');
+  if(!orders.length){tbody.innerHTML='<tr><td colspan="10" class="empty-state"><div class="ico">📋</div>受注データがありません</td></tr>';return;}
+  tbody.innerHTML = orders.slice().reverse().map(o => {
+    const hasDiff = o.invoiceAmount!==null && Math.abs(o.invoiceAmount-o.net)>0;
+    return `<tr>
+      <td class="mono" style="font-size:10px">${o.id}</td>
+      <td>${o.client}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.subject}</td>
+      <td class="mono">${fmtY(o.net)}</td>
+      <td class="mono" style="color:var(--accent)">${fmtY(o.taxed)}</td>
+      <td>${o.invoiceAmount===null?chip('未照合','gray'):hasDiff?chip('⚠差分','r'):chip('✓一致','g')}</td>
+      <td>${o.salesConfirm==='confirmed'?chip('✓確認済','g'):o.salesConfirm==='sent'?chip('送信済','slack'):chip('未送信','gray')}</td>
+      <td>${o.status==='invoiced'?chip('請求済','g'):chip('未請求','y')}</td>
+      <td>${o.driveSaved?chip('☁保存済','drive'):chip('未保存','gray')}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openInvoice('${o.id}')">請求書</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════════════════════════════════════
+// CHECK (案2)
+// ════════════════════════════════════
+function renderCheckSelects() {
+  const sel = document.getElementById('chk-order-id');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— 選択 —</option>';
+  orders.forEach(o => sel.innerHTML += `<option value="${o.id}">${o.id} | ${o.client} | ${o.subject}</option>`);
+  if(cur) sel.value = cur;
+  renderDiffLogs();
+}
+function loadForCheck() {
+  const id = document.getElementById('chk-order-id').value;
+  if(!id){['chk-master','chk-taxrate'].forEach(i=>document.getElementById(i).value='');['diff-result','diff-tax'].forEach(i=>document.getElementById(i).innerHTML='');return;}
+  const o = orders.find(x=>x.id===id); if(!o) return;
+  document.getElementById('chk-master').value  = fmtY(o.net);
+  document.getElementById('chk-taxrate').value = `${o.taxrate}%`;
+  if(o.invoiceAmount!==null) document.getElementById('chk-inv-amt').value = o.invoiceAmount;
+  runDiff();
+}
+function runDiff() {
+  const id  = document.getElementById('chk-order-id').value;
+  const inv = parseFloat(document.getElementById('chk-inv-amt').value);
+  const res = document.getElementById('diff-result');
+  const tex = document.getElementById('diff-tax');
+  if(!id||isNaN(inv)){res.innerHTML='';tex.innerHTML='';return;}
+  const o = orders.find(x=>x.id===id); if(!o) return;
+  const diff = inv - o.net;
+  const it = Math.round(inv*o.taxrate/100);
+  tex.innerHTML = `税計算：${fmtY(inv)} × ${o.taxrate}% = 消費税 ${fmtY(it)} → 税込 <strong style="color:var(--accent)">${fmtY(inv+it)}</strong>`;
+  res.innerHTML = Math.abs(diff)<1
+    ? '<div class="al-ok">✓ 金額一致。マスターと完全に一致しています。</div>'
+    : `<div class="al-err">⚠ 差分検出：${fmtY(Math.abs(diff))}の${diff>0?'超過':'不足'}。マスター:${fmtY(o.net)} / 入力:${fmtY(inv)}</div>`;
+  const idx = orders.findIndex(x=>x.id===id);
+  orders[idx].invoiceAmount = inv; orders[idx].diffChecked = true;
+  const le = {orderId:id, client:o.client, subject:o.subject, masterAmt:o.net, invoiceAmt:inv, diff, at:new Date().toISOString()};
+  const ex = diffLogs.findIndex(x=>x.orderId===id);
+  if(ex>=0) diffLogs[ex]=le; else diffLogs.push(le);
+  addLog('diff', `突合：${o.client} 差分${Math.abs(diff)<1?'なし':fmtY(Math.abs(diff))}`, id, Math.abs(diff)<1?'green':'red');
+  save(); renderDiffLogs();
+}
+function renderDiffLogs() {
+  const el = document.getElementById('diff-log');
+  if(!diffLogs.length){el.innerHTML='<div class="empty-state"><div class="ico">🔍</div>まだチェックされていません</div>';return;}
+  el.innerHTML = diffLogs.slice().reverse().map(l => `
+    <div class="hist-item">
+      <div class="hist-dot" style="background:${Math.abs(l.diff)<1?'var(--green)':'var(--red)'}"></div>
+      <div class="hist-content">
+        <div class="hist-action">${l.client}｜${l.subject}</div>
+        <div class="hist-detail">マスター:${fmtY(l.masterAmt)} / 入力:${fmtY(l.invoiceAmt)} / 差分:<strong style="color:${Math.abs(l.diff)<1?'var(--green)':'var(--red)'}">${Math.abs(l.diff)<1?'一致':fmtY(Math.abs(l.diff))+(l.diff>0?'超過':'不足')}</strong></div>
+      </div>
+      <div class="hist-time">${fmtD(l.at)}</div>
+    </div>`).join('');
+}
+
+// ════════════════════════════════════
+// CONFIRM / SLACK (案3)
+// ════════════════════════════════════
+function renderConfirmList() {
+  document.getElementById('slack-warning').style.display = !localStorage.getItem('im4_webhook') ? 'block' : 'none';
+  const el = document.getElementById('confirm-list');
+  if(!orders.length){el.innerHTML='<div class="empty-state"><div class="ico">✉️</div>受注登録後に表示されます</div>';return;}
+  el.innerHTML = orders.slice().reverse().map(o => {
+    const isConf = o.salesConfirm==='confirmed', isSent = o.salesConfirm==='sent';
+    return `<div class="conf-card">
+      <div class="conf-info">
+        <div class="conf-title">${o.client}｜${o.subject}</div>
+        <div class="conf-meta">担当: ${o.sales}${o.salesConfirmAt?` ／ 確認: ${fmtD(o.salesConfirmAt)}`:''}</div>
+      </div>
+      <div class="conf-amt">${fmtY(o.taxed)}<span style="font-size:9px;color:var(--text2);margin-left:2px">税込</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        ${isConf ? chip('✓ 確認済','g') : isSent
+          ? `<div style="display:flex;gap:4px;align-items:center">${chip('Slack送信済','slack')}<button class="btn btn-success btn-sm" onclick="markConfirmed('${o.id}')">✓ 確認済</button></div>`
+          : `<button class="btn btn-slack btn-sm" onclick="sendSlack('${o.id}')">📤 Slack送信</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+async function sendSlack(id) {
+  const o = orders.find(x=>x.id===id); if(!o) return;
+  const wh = localStorage.getItem('im4_webhook');
+  if(!wh){toast('⚠ Webhook URL を設定してください','yellow');goPage('settings');return;}
+  try{
+    await fetch(wh,{method:'POST',body:JSON.stringify({text:'📌 請求前の金額確認をお願いします',blocks:[
+      {type:'header',text:{type:'plain_text',text:'📌 請求前の金額確認をお願いします',emoji:true}},
+      {type:'section',fields:[
+        {type:'mrkdwn',text:`*取引先*\n${o.client}`},{type:'mrkdwn',text:`*件名*\n${o.subject}`},
+        {type:'mrkdwn',text:`*請求金額（税込）*\n*${fmtY(o.taxed)}*`},{type:'mrkdwn',text:`*受注ID*\n${o.id}`}
+      ]}
+    ]})});
+    const idx=orders.findIndex(x=>x.id===id); orders[idx].salesConfirm='sent';
+    addLog('slack','Slack送信：'+o.client,id,'yellow'); save();
+    toast(`📤 ${o.sales} に送信しました`,'yellow');
+  }catch(e){toast('❌ Slack送信失敗','red');}
+  renderConfirmList();
+}
+async function sendAllConfirm() {
+  const targets = orders.filter(o=>o.salesConfirm==='waiting');
+  if(!targets.length){toast('送信対象なし','gray');return;}
+  for(const o of targets) await sendSlack(o.id);
+  toast(`📤 ${targets.length}件を一括送信`,'yellow');
+}
+function markConfirmed(id) {
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  const idx=orders.findIndex(x=>x.id===id);
+  orders[idx].salesConfirm='confirmed'; orders[idx].salesConfirmAt=new Date().toISOString();
+  addLog('confirmed','確認済：'+o.client,id,'green'); save();
+  toast(`✅ ${o.sales} の確認を記録`,'green'); renderConfirmList();
+}
+
+// ════════════════════════════════════
+// PDF IMPORT + PDF.js VIEWER
+// ════════════════════════════════════
+function onDragOver(e){e.preventDefault();document.getElementById('pdf-drop').classList.add('drag');}
+function onDragLeave(){document.getElementById('pdf-drop').classList.remove('drag');}
+function onDrop(e){e.preventDefault();document.getElementById('pdf-drop').classList.remove('drag');handlePdfFiles(e.dataTransfer.files);}
+
+function handlePdfFiles(files) {
+  const queue = document.getElementById('pdf-upload-queue');
+  Array.from(files).filter(f=>f.type==='application/pdf').forEach(file => {
+    const id = 'PDF-' + Date.now() + Math.random().toString(36).slice(2,5);
+    const meta = {id, name:file.name, size:file.size, uploadedAt:new Date().toISOString(),
+      extracted:null, linkedOrderId:null, driveSaved:false, driveFileId:null};
+    pdfMeta.push(meta);
+    pdfBlobs[id] = file;
+    save();
+    addLog('pdf_import', `PDF取込：${file.name}`, id, 'blue');
+    // Build queue card
+    const card = document.createElement('div');
+    card.id = 'pdfq-'+id; card.className = 'card';
+    card.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:20px">📄</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600">${file.name}</div>
+          <div style="font-size:10px;color:var(--text3)">${(file.size/1024).toFixed(0)} KB</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="openViewer('${id}')">🔍 プレビュー</button>
+        <button class="btn btn-ai btn-sm" id="aibtn-${id}" onclick="runAIExtract('${id}')">🤖 AI読み取り</button>
+        <button class="btn btn-drive btn-sm" onclick="saveSinglePdf('${id}')">☁ Drive</button>
+      </div>
+      <div id="ai-result-${id}">
+        <div style="font-size:10px;color:var(--text3)">「🤖 AI読み取り」ボタンを押すと金額・取引先・明細を自動抽出します</div>
+      </div>`;
+    queue.appendChild(card);
+    // Auto-render first page thumbnail
+    renderPdfThumbnail(file, id);
+  });
+  toast(`📄 ${Array.from(files).filter(f=>f.type==='application/pdf').length}件を取込みました`,'blue');
+}
+
+async function renderPdfThumbnail(file, id) {
+  try{
+    const ab = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: ab}).promise;
+    const page = await pdf.getPage(1);
+    const scale = 0.3;
+    const vp = page.getViewport({scale});
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
+    const card = document.getElementById('pdfq-'+id);
+    if(card){
+      const thumb = document.createElement('img');
+      thumb.src = canvas.toDataURL();
+      thumb.style.cssText = 'width:100%;border-radius:4px;margin-top:6px;border:1px solid var(--border)';
+      card.appendChild(thumb);
+    }
+  }catch(e){}
+}
+
+// ────────────────────────────────────
+// PDF.js Viewer
+// ────────────────────────────────────
+async function openViewer(id) {
+  currentPdfId = id;
+  currentPage  = 1;
+  const file   = pdfBlobs[id];
+  if(!file){toast('PDFファイルが見つかりません（ページリロード後は再取込が必要です）','yellow');return;}
+  switchTab('viewer');
+  const area = document.getElementById('pdf-viewer-area');
+  const meta = pdfMeta.find(p=>p.id===id) || {};
+  // Build viewer layout
+  area.innerHTML = `
+    <div class="pdf-viewer-layout">
+      <div class="pdf-canvas-area">
+        <div class="pdf-canvas-toolbar">
+          <button class="btn btn-secondary btn-sm" onclick="changePage(-1)" id="btn-prev">◀</button>
+          <span id="page-info" style="font-size:11px;color:var(--text2)">ページ 1 / 1</span>
+          <button class="btn btn-secondary btn-sm" onclick="changePage(1)" id="btn-next">▶</button>
+          <button class="btn btn-secondary btn-sm" onclick="changeZoom(-0.2)">−</button>
+          <span id="zoom-info" style="font-size:11px;color:var(--text2)">100%</span>
+          <button class="btn btn-secondary btn-sm" onclick="changeZoom(0.2)">＋</button>
+          <span style="margin-left:auto;font-size:10px;color:var(--text3)">${meta.name||''}</span>
+          <button class="btn btn-ai btn-sm" onclick="runAIExtract('${id}')">🤖 AI読み取り</button>
+        </div>
+        <div class="pdf-canvas-wrap" id="pdf-canvas-wrap">
+          <div class="pdf-canvas-empty"><div class="ico">⏳</div>読み込み中…</div>
+        </div>
+      </div>
+      <div class="pdf-side-panel">
+        <div class="ai-result-card" id="viewer-ai-${id}">
+          <div class="ai-label">🤖 AI 読み取り結果</div>
+          ${meta.extracted ? buildAIResultHTML(meta.extracted, id) : `<div style="font-size:11px;color:var(--text2);text-align:center;padding:20px 0">「🤖 AI読み取り」ボタンを押してください<br><span style="font-size:10px;color:var(--text3);margin-top:4px;display:block">取引先・金額・発行日を自動抽出します</span></div>`}
+        </div>
+        <div class="link-section">
+          <div class="link-title">受注との紐付け</div>
+          ${buildLinkSection(id)}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-drive" style="flex:1" onclick="saveSinglePdf('${id}')">☁ Driveに保存</button>
+        </div>
+      </div>
+    </div>`;
+  // Load PDF.js doc
+  const ab = await file.arrayBuffer();
+  currentPdfDoc = await pdfjsLib.getDocument({data: ab}).promise;
+  window._pdfZoom = 1.2;
+  renderPage(1);
+}
+
+async function renderPage(pageNum) {
+  if(!currentPdfDoc) return;
+  const page = await currentPdfDoc.getPage(pageNum);
+  const vp = page.getViewport({scale: window._pdfZoom || 1.2});
+  const canvas = document.createElement('canvas');
+  canvas.width = vp.width; canvas.height = vp.height;
+  const ctx = canvas.getContext('2d');
+  await page.render({canvasContext: ctx, viewport: vp}).promise;
+  const wrap = document.getElementById('pdf-canvas-wrap');
+  if(wrap){ wrap.innerHTML=''; wrap.appendChild(canvas); }
+  currentPage = pageNum;
+  const total = currentPdfDoc.numPages;
+  const pi = document.getElementById('page-info');
+  if(pi) pi.textContent = `ページ ${pageNum} / ${total}`;
+  const zi = document.getElementById('zoom-info');
+  if(zi) zi.textContent = Math.round((window._pdfZoom||1.2)*100/1.2) + '%';
+}
+
+function changePage(delta) {
+  if(!currentPdfDoc) return;
+  const next = currentPage + delta;
+  if(next >= 1 && next <= currentPdfDoc.numPages) renderPage(next);
+}
+function changeZoom(delta) {
+  window._pdfZoom = Math.max(0.4, Math.min(3.6, (window._pdfZoom||1.2) + delta));
+  renderPage(currentPage);
+}
+
+// ────────────────────────────────────
+// AI EXTRACT (Claude API)
+// ────────────────────────────────────
+async function runAIExtract(id) {
+  const apiKey = localStorage.getItem('im4_aikey');
+  if(!apiKey){toast('⚠ 設定 > Claude AI に APIキーを入力してください','yellow');goPage('settings');return;}
+  const file = pdfBlobs[id];
+  if(!file){toast('PDFファイルが見つかりません（ページリロード後は再取込が必要です）','yellow');return;}
+  // Show loading in viewer panel and queue card
+  const viewerPanel = document.getElementById('viewer-ai-'+id);
+  const queueResult = document.getElementById('ai-result-'+id);
+  const loadingHTML = `<div class="ai-loading"><div class="ai-spinner"></div><div class="ai-loading-text">Claude AIが読み取り中…</div><div class="ai-loading-sub">取引先・金額・日付を抽出しています</div></div>`;
+  if(viewerPanel) viewerPanel.innerHTML = `<div class="ai-label">🤖 AI 読み取り結果</div>${loadingHTML}`;
+  if(queueResult) queueResult.innerHTML = loadingHTML;
+  try {
+    // Render all pages to base64 images
+    const ab = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: ab}).promise;
+    const images = [];
+    for(let i=1; i<=Math.min(pdf.numPages, 3); i++) { // up to 3 pages
+      const page = await pdf.getPage(i);
+      const vp = page.getViewport({scale: 2.0}); // high res for OCR
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({canvasContext: canvas.getContext('2d'), viewport: vp}).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+    }
+    // Build message to Claude
+    const content = [
+      ...images.map((img,i) => ({type:'image',source:{type:'base64',media_type:'image/jpeg',data:img}})),
+      {type:'text', text:`この請求書から3項目だけ読み取ってください。
+JSONのみ返答（コードブロック不要）：
+{
+  "client": "請求元の会社名（発行者側）",
+  "total": 請求金額の合計（税込・数値のみ）,
+  "issueDate": "発行日 YYYY-MM-DD形式"
+}
+読み取れない項目はnullにしてください。`}
+    ];
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:200, messages:[{role:'user',content}]})
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||resp.status);}
+    const data = await resp.json();
+    const text = data.content.map(c=>c.text||'').join('');
+    let extracted;
+    try {
+      const cleaned = text.replace(/```json|```/g,'').trim();
+      extracted = JSON.parse(cleaned);
+    } catch(e) {
+      // Try to find JSON in response
+      const match = text.match(/\{[\s\S]*\}/);
+      if(match) extracted = JSON.parse(match[0]);
+      else throw new Error('JSONパース失敗: ' + text.slice(0,100));
+    }
+    const idx = pdfMeta.findIndex(p=>p.id===id);
+    if(idx>=0) pdfMeta[idx].extracted = extracted;
+    save();
+    addLog('ai_extract', `AI読み取り完了：${file.name} / ${extracted.client||'—'} / ${fmtY(extracted.total)} / ${extracted.issueDate||'—'}`, id, 'blue');
+    const resultHTML = buildAIResultHTML(extracted, id);
+    if(viewerPanel) viewerPanel.innerHTML = `<div class="ai-label">🤖 AI 読み取り結果</div>${resultHTML}`;
+    if(queueResult) queueResult.innerHTML = resultHTML;
+    toast('🤖 AI読み取り完了', 'blue');
+    // Update link section
+    const linkEl = document.querySelector('.link-section');
+    if(linkEl) linkEl.innerHTML = `<div class="link-title">受注との紐付け</div>${buildLinkSection(id)}`;
+  } catch(e) {
+    const errHTML = `<div class="al-err" style="margin-top:8px">❌ 読み取りエラー: ${e.message}</div>`;
+    if(viewerPanel) viewerPanel.innerHTML = `<div class="ai-label">🤖 AI 読み取り結果</div>${errHTML}`;
+    if(queueResult) queueResult.innerHTML = errHTML;
+    toast('❌ AI読み取り失敗: ' + e.message, 'red');
+  }
+}
+
+function buildAIResultHTML(ex, id) {
+  return `
+    <div class="ai-field"><div class="ai-field-lbl">取引先（請求元）</div><div class="ai-field-val">${ex.client||'—'}</div></div>
+    <div class="ai-field"><div class="ai-field-lbl">請求金額（税込）</div><div class="ai-field-val highlight">${ex.total!=null?fmtY(ex.total):'—'}</div></div>
+    <div class="ai-field"><div class="ai-field-lbl">発行日</div><div class="ai-field-val">${ex.issueDate||'—'}</div></div>
+    <div style="margin-top:10px">
+      <button class="btn btn-success btn-sm" style="width:100%" onclick="linkFromAI('${id}')">↔ 受注と突合・紐付け</button>
+    </div>`;
+}
+
+function buildLinkSection(id) {
+  const meta = pdfMeta.find(p=>p.id===id);
+  if(!meta) return '<div class="link-nodata">データなし</div>';
+  const ex = meta.extracted;
+  // Try auto-match by amount or client
+  let suggestedId = null;
+  if(ex && orders.length) {
+    if(ex.total) suggestedId = orders.find(o=>Math.abs(o.taxed-ex.total)<1)?.id;
+    if(!suggestedId && ex.client) suggestedId = orders.find(o=>o.client.includes(ex.client)||ex.client.includes(o.client))?.id;
+  }
+  const orderOpts = orders.map(o=>`<option value="${o.id}" ${(meta.linkedOrderId||suggestedId)===o.id?'selected':''}>${o.id} | ${o.client} | ${fmtY(o.taxed)}</option>`).join('');
+  const matchHtml = suggestedId && !meta.linkedOrderId
+    ? `<div class="link-match">🎯 金額・取引先から自動マッチ：${suggestedId}</div>`
+    : '';
+  return `${matchHtml}
+    <select id="link-sel-${id}" style="width:100%;margin-bottom:6px">
+      <option value="">— 紐付けなし —</option>${orderOpts}
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="confirmLink('${id}')">紐付けを保存</button>
+    ${meta.linkedOrderId?`<div style="margin-top:5px;font-size:10px;color:var(--green)">✓ 現在：${meta.linkedOrderId} に紐付け済</div>`:''}`;
+}
+
+function linkFromAI(id) {
+  const meta = pdfMeta.find(p=>p.id===id); if(!meta||!meta.extracted) return;
+  const ex = meta.extracted;
+  // Auto find matching order
+  let matched = null;
+  if(ex.total)   matched = orders.find(o=>Math.abs(o.taxed-ex.total)<1);
+  if(!matched&&ex.client) matched = orders.find(o=>o.client.includes(ex.client)||ex.client.includes(o.client));
+  if(matched) {
+    const sel = document.getElementById('link-sel-'+id);
+    if(sel) sel.value = matched.id;
+    // Run diff check automatically
+    const idx = orders.findIndex(o=>o.id===matched.id);
+    if(idx>=0 && ex.total!=null) {
+      const diff = ex.total - matched.taxed;
+      const diffMsg = Math.abs(diff)<1
+        ? '<div class="al-ok" style="margin-top:6px">✓ 受注マスターと金額一致確認済</div>'
+        : `<div class="al-err" style="margin-top:6px">⚠ 差分：${fmtY(Math.abs(diff))}の${diff>0?'超過':'不足'}</div>`;
+      const ls = document.querySelector('.link-section');
+      if(ls) ls.innerHTML += diffMsg;
+    }
+    toast(`🎯 受注 ${matched.id} と自動マッチしました`,'green');
+  } else {
+    toast('⚠ 自動マッチする受注が見つかりませんでした','yellow');
+  }
+}
+
+function confirmLink(id) {
+  const sel = document.getElementById('link-sel-'+id);
+  if(!sel) return;
+  const orderId = sel.value;
+  const idx = pdfMeta.findIndex(p=>p.id===id);
+  if(idx>=0) pdfMeta[idx].linkedOrderId = orderId || null;
+  save();
+  addLog('pdf_link', `PDF紐付け：${pdfMeta[idx].name} → ${orderId||'解除'}`, id, 'blue');
+  toast('✓ 紐付けを保存しました','green');
+  const ls = document.querySelector('.link-section');
+  if(ls) ls.innerHTML = `<div class="link-title">受注との紐付け</div>${buildLinkSection(id)}`;
+}
+
+function renderPdfList() {
+  const el = document.getElementById('pdf-saved-list');
+  if(!pdfMeta.length){el.innerHTML='<div class="empty-state"><div class="ico">📂</div>取込済PDFがありません</div>';return;}
+  el.innerHTML = pdfMeta.slice().reverse().map(p => {
+    const ex = p.extracted || {};
+    const linked = p.linkedOrderId ? orders.find(o=>o.id===p.linkedOrderId) : null;
+    return `<div class="pdf-list-item" onclick="openViewer('${p.id}');switchTab('viewer')">
+      <div class="pli-icon">📄</div>
+      <div class="pli-info">
+        <div class="pli-name">${p.name}</div>
+        <div class="pli-meta">${(p.size/1024).toFixed(0)} KB · ${fmtD(p.uploadedAt)}</div>
+        <div class="pli-chips">
+          ${ex.client?chip(ex.client,'b'):''}
+          ${ex.total!=null?chip(fmtY(ex.total),'g'):''}
+          ${ex.issueDate?chip(ex.issueDate,'gray'):''}
+          ${linked?chip('→'+linked.id,'drive'):chip('未紐付け','gray')}
+          ${p.driveSaved?chip('☁保存済','drive'):chip('未保存','gray')}
+          ${p.extracted?chip('AI読取済','ai'):chip('未読取','gray')}
+        </div>
+      </div>
+      <div class="pli-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-ai btn-sm" onclick="openViewer('${p.id}');switchTab('viewer');setTimeout(()=>runAIExtract('${p.id}'),300)">🤖 AI</button>
+        <button class="btn btn-drive btn-sm" onclick="saveSinglePdf('${p.id}')">☁</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════
+// GOOGLE DRIVE
+// ════════════════════════════════════
+function connectDrive() {
+  const clientId = localStorage.getItem('im4_gClientId');
+  if(!clientId){toast('⚠ 設定 > Google Drive に Client ID を入力してください','yellow');goPage('settings');return;}
+  const scope = 'https://www.googleapis.com/auth/drive.file';
+  const origin = window.location.href.split('?')[0].split('#')[0];
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(origin)}&response_type=token&scope=${encodeURIComponent(scope)}&prompt=consent`;
+  const popup = window.open(url,'driveAuth','width=480,height=580');
+  const timer = setInterval(()=>{
+    try{
+      if(popup.closed){clearInterval(timer);return;}
+      const h = popup.location.hash;
+      if(h&&h.includes('access_token')){
+        clearInterval(timer); popup.close();
+        driveToken = new URLSearchParams(h.slice(1)).get('access_token');
+        onDriveConnected();
+      }
+    }catch(e){}
+  },500);
+}
+
+async function onDriveConnected() {
+  try{
+    const u = await (await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:`Bearer ${driveToken}`}})).json();
+    document.getElementById('drive-status-txt').innerHTML = `<span style="color:var(--green);font-weight:600">✓ 接続済</span>`;
+    document.getElementById('drive-user-txt').textContent = u.email||'';
+    const b = document.getElementById('badge-drive'); b.className='badge-intg bi-drive'; b.textContent='Drive 接続済';
+    document.getElementById('btn-sync-all').disabled=false;
+    document.getElementById('btn-save-excel').disabled=false;
+    document.getElementById('btn-save-csv').disabled=false;
+    const fn = localStorage.getItem('im4_gFolder')||'請求マスター';
+    driveFolderId = await getOrMkFolder(fn);
+    document.getElementById('drive-folder-txt').textContent = `マイドライブ / ${fn}`;
+    addDL('✓ Drive接続：'+u.email,'ok');
+    save(); toast('☁ Google Driveに接続しました','blue');
+  }catch(e){ addDL('❌ 接続失敗：'+e.message,'err'); toast('❌ Drive接続失敗','red'); }
+}
+
+async function getOrMkFolder(name, parentId=null) {
+  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentId?` and '${parentId}' in parents`:''}`;
+  const r = await (await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`,{headers:{Authorization:`Bearer ${driveToken}`}})).json();
+  if(r.files&&r.files.length) return r.files[0].id;
+  const c = await (await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:`Bearer ${driveToken}`,'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',...(parentId?{parents:[parentId]}:{})})})).json();
+  return c.id;
+}
+
+async function uploadToDrive(filename, blob, mime, folderId) {
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify({name:filename,parents:[folderId]})],{type:'application/json'}));
+  form.append('file', blob);
+  return await (await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',{method:'POST',headers:{Authorization:`Bearer ${driveToken}`},body:form})).json();
+}
+
+async function autoSaveOrderToDrive(o) {
+  if(!driveToken||!driveFolderId) return;
+  try{
+    const sub = await getOrMkFolder('受注管理台帳',driveFolderId);
+    const blob = wbToBlob(buildMasterWb([o]));
+    await uploadToDrive(`受注台帳_${new Date().toISOString().slice(0,7)}.xlsx`,blob,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',sub);
+    const idx = orders.findIndex(x=>x.id===o.id);
+    if(idx>=0){orders[idx].driveSaved=true;} save(); addDL(`✓ 受注保存：${o.id}`,'ok');
+  }catch(e){addDL(`❌ 保存失敗：${o.id}`,'err');}
+}
+
+async function saveMasterToDrive() {
+  if(!driveToken){toast('先にDriveに接続してください','yellow');return;}
+  try{
+    setP(40); const sub=await getOrMkFolder('受注管理台帳',driveFolderId);
+    setP(70); await uploadToDrive(`受注台帳_${new Date().toISOString().slice(0,10)}.xlsx`,wbToBlob(buildMasterWb(orders)),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',sub);
+    setP(100); addDL(`✓ 台帳保存 ${orders.length}件`,'ok'); toast('☁ 台帳をDriveに保存しました','blue');
+    setTimeout(()=>setP(0),2000);
+  }catch(e){setP(0);toast('❌ 保存失敗：'+e.message,'red');}
+}
+
+async function saveAccountingToDrive() {
+  if(!driveToken){toast('先にDriveに接続してください','yellow');return;}
+  try{
+    setP(40); const sub=await getOrMkFolder('受注管理台帳',driveFolderId);
+    const wb=XLSX.utils.book_new();
+    const h=['計上日','取引先','摘要','税抜','税率','消費税','税込','受注ID'];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([h,...orders.map(o=>[o.dueDate||'',o.client,o.subject,o.net,o.taxrate,o.tax,o.taxed,o.id])]),'会計CSV');
+    setP(70); await uploadToDrive(`会計CSV_${new Date().toISOString().slice(0,10)}.xlsx`,wbToBlob(wb),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',sub);
+    setP(100); addDL('✓ 会計CSV保存','ok'); toast('☁ 会計CSVをDriveに保存','blue');
+    setTimeout(()=>setP(0),2000);
+  }catch(e){setP(0);toast('❌ 保存失敗','red');}
+}
+
+async function saveInvoiceToDrive() {
+  if(!driveToken){connectDrive();return;}
+  const o=orders.find(x=>x.id===currentInvId); if(!o) return;
+  try{
+    const sub=await getOrMkFolder('発行請求書',driveFolderId);
+    await uploadToDrive(`請求書_${o.id}.xlsx`,wbToBlob(buildInvWb(o)),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',sub);
+    addDL(`✓ 請求書保存：${o.id}`,'ok'); toast('☁ 請求書をDriveに保存しました','blue');
+  }catch(e){toast('❌ 保存失敗：'+e.message,'red');}
+}
+
+async function saveSinglePdf(id) {
+  if(!driveToken){toast('先にDriveに接続してください','yellow');return;}
+  const p=pdfMeta.find(x=>x.id===id); const blob=pdfBlobs[id];
+  if(!p||!blob){toast('ファイルが見つかりません（ページリロード後は再取込が必要です）','yellow');return;}
+  try{
+    const sub=await getOrMkFolder('受領PDF',driveFolderId);
+    const client=p.extracted?.client||'unknown';
+    const date=new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const fname=`${client}_請求書_${date}.pdf`;
+    await uploadToDrive(fname,blob,'application/pdf',sub);
+    const idx=pdfMeta.findIndex(x=>x.id===id);
+    if(idx>=0){pdfMeta[idx].driveSaved=true;} save();
+    addDL(`✓ PDF保存：${fname}`,'ok'); toast('☁ PDFをDriveに保存しました','blue');
+    renderPdfList();
+  }catch(e){addDL(`❌ PDF保存失敗：${e.message}`,'err');toast('❌ PDF保存失敗','red');}
+}
+
+async function syncAll() {
+  if(!driveToken){toast('先にDriveに接続してください','yellow');return;}
+  toast('☁ 全件同期開始…','blue');
+  await saveMasterToDrive();
+  for(const o of orders) if(!o.driveSaved) await autoSaveOrderToDrive(o);
+  for(const p of pdfMeta) if(!p.driveSaved&&pdfBlobs[p.id]) await saveSinglePdf(p.id);
+  renderDrivePage(); toast('☁ 全件同期完了','blue');
+}
+
+function renderDrivePage() {
+  const tbody=document.getElementById('drive-stats-body');
+  tbody.innerHTML=`
+    <tr><td>受注管理台帳</td><td>${orders.length}件</td><td>${orders.filter(o=>o.driveSaved).length}件保存済</td></tr>
+    <tr><td>お客様PDF</td><td>${pdfMeta.length}件</td><td>${pdfMeta.filter(p=>p.driveSaved).length}件保存済</td></tr>`;
+}
+
+function addDL(msg,type){
+  const t=new Date();
+  const time=`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+  driveLogs.unshift({msg,type,time});
+  if(driveLogs.length>50) driveLogs=driveLogs.slice(0,50);
+  const el=document.getElementById('drive-log');
+  if(el) el.innerHTML=driveLogs.slice(0,20).map(l=>`<div class="drive-log-e"><span class="dl-t">${l.time}</span><span class="${l.type==='ok'?'dl-ok':l.type==='err'?'dl-err':'dl-inf'}">${l.msg}</span></div>`).join('');
+}
+function setP(v){const el=document.getElementById('drive-prog');if(el)el.style.width=v+'%';}
+
+// ════════════════════════════════════
+// INVOICE
+// ════════════════════════════════════
+function openInvoice(id) {
+  const o=orders.find(x=>x.id===id); if(!o) return;
+  currentInvId=id;
+  document.getElementById('invoice-content').innerHTML=`
+    <div class="inv-wrap">
+      <div class="inv-head">
+        <div class="inv-ttl">請　求　書</div>
+        <div class="inv-meta-r">請求書番号: ${o.id}-INV<br>発行日: ${new Date().toLocaleDateString('ja-JP')}<br>支払期限: ${o.payment||'—'}</div>
+      </div>
+      <div class="inv-to"><strong style="font-size:13px">${o.client} 御中</strong></div>
+      <table class="inv-tbl">
+        <thead><tr><th>品目</th><th>税抜金額</th><th>税率</th><th>消費税</th></tr></thead>
+        <tbody>
+          <tr><td>${o.subject}</td><td style="text-align:right">¥${o.amount.toLocaleString()}</td><td style="text-align:center">${o.taxrate}%</td><td style="text-align:right">¥${Math.round(o.amount*o.taxrate/100).toLocaleString()}</td></tr>
+          ${o.discount>0?`<tr><td style="color:#e53935">値引き</td><td style="text-align:right;color:#e53935">-¥${o.discount.toLocaleString()}</td><td style="text-align:center">${o.taxrate}%</td><td style="text-align:right;color:#e53935">-¥${Math.round(o.discount*o.taxrate/100).toLocaleString()}</td></tr>`:''}
+        </tbody>
+      </table>
+      <div class="inv-totals">
+        <div class="inv-tot-row"><span>小計（税抜）</span><span>¥${o.net.toLocaleString()}</span></div>
+        <div class="inv-tot-row"><span>消費税（${o.taxrate}%）</span><span>¥${o.tax.toLocaleString()}</span></div>
+        <div class="inv-tot-final"><span>合計請求金額</span><span>¥${o.taxed.toLocaleString()}</span></div>
+      </div>
+      ${o.note?`<div class="inv-foot">備考：${o.note}</div>`:''}
+      <div class="inv-foot" style="color:${o.salesConfirm==='confirmed'?'#2ecc8a':'#e53935'}">
+        営業確認：${o.salesConfirm==='confirmed'?`✓ 確認済（${fmtD(o.salesConfirmAt)}）`:'⚠ 未確認'}
+      </div>
+    </div>`;
+  document.getElementById('modal-invoice').classList.add('open');
+  const idx=orders.findIndex(x=>x.id===id);
+  if(orders[idx].status!=='invoiced'){orders[idx].status='invoiced';addLog('invoice',`請求書発行：${o.client} ${fmtY(o.taxed)}`,id,'blue');save();}
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+// ════════════════════════════════════
+// EXCEL
+// ════════════════════════════════════
+function buildInvWb(o) {
+  const wb=XLSX.utils.book_new();
+  const d=[['請　求　書','','','','',''],['','','','','請求書番号',`${o.id}-INV`],['','','','','発行日',new Date().toLocaleDateString('ja-JP')],['','','','','支払期限',o.payment||'—'],[],[],[`${o.client} 御中`,'','','','',conf.company],['下記の通りご請求申し上げます。','','','','',conf.dept],[],[],['品目','内容','','単価（税抜）','数量','金額（税抜）'],[o.subject,'','',o.amount,1,o.amount],...(o.discount>0?[['値引き','','',-o.discount,1,-o.discount]]:[]),[],[],['','','','小計（税抜）','',o.net],['','','',`消費税（${o.taxrate}%）`,'',o.tax],['','','','合計請求金額','',o.taxed],[],[],['お振込先',conf.bank,'','','',''],['営業確認',o.salesConfirm==='confirmed'?`確認済（${fmtD(o.salesConfirmAt)}）`:'未確認','','','','']];
+  const ws=XLSX.utils.aoa_to_sheet(d); ws['!cols']=[{wch:20},{wch:20},{wch:12},{wch:16},{wch:8},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws,'請求書'); return wb;
+}
+function buildMasterWb(list) {
+  const wb=XLSX.utils.book_new();
+  const h=['受注ID','取引先','件名','担当','受注額(税抜)','値引き','純額(税抜)','税率','消費税','税込','請求予定','入金期日','値引き理由','営業確認','確認日','状態','差分','Drive','備考'];
+  const rows=list.map(o=>[o.id,o.client,o.subject,o.sales,o.amount,o.discount,o.net,o.taxrate,o.tax,o.taxed,o.dueDate||'',o.payment||'',o.discReason||'',o.salesConfirm,o.salesConfirmAt?fmtD(o.salesConfirmAt):'',o.status,o.invoiceAmount!==null?(Math.abs(o.invoiceAmount-o.net)<1?'一致':'差分あり'):'未照合',o.driveSaved?'保存済':'未保存',o.note||'']);
+  const ws=XLSX.utils.aoa_to_sheet([h,...rows]); ws['!cols']=h.map(()=>({wch:14}));
+  XLSX.utils.book_append_sheet(wb,ws,'受注管理台帳');
+  const ch=['計上日','取引先','摘要','税抜','税率','消費税','税込','受注ID'];
+  const cr=list.map(o=>[o.dueDate||'',o.client,o.subject,o.net,`${o.taxrate}%`,o.tax,o.taxed,o.id]);
+  const ws2=XLSX.utils.aoa_to_sheet([ch,...cr]); ws2['!cols']=ch.map(()=>({wch:14}));
+  XLSX.utils.book_append_sheet(wb,ws2,'会計CSV用'); return wb;
+}
+function wbToBlob(wb){const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});return new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});}
+function exportInvoiceExcel(){const o=orders.find(x=>x.id===currentInvId);if(!o)return;XLSX.writeFile(buildInvWb(o),`請求書_${o.id}.xlsx`);toast('📊 Excel出力','green');closeModal('modal-invoice');}
+function exportMasterExcel(){if(!orders.length){toast('受注データがありません','yellow');return;}XLSX.writeFile(buildMasterWb(orders),`受注管理台帳_${new Date().toISOString().slice(0,10)}.xlsx`);toast('📊 台帳Excelを出力','green');}
+
+// ════════════════════════════════════
+// HISTORY
+// ════════════════════════════════════
+function addLog(type,msg,orderId,color){logs.unshift({type,msg,orderId,color,at:new Date().toISOString()});if(logs.length>300)logs=logs.slice(0,300);}
+function renderHistory(){
+  const el=document.getElementById('history-list');
+  if(!logs.length){el.innerHTML='<div class="empty-state"><div class="ico">📜</div>ログがありません</div>';return;}
+  const cm={green:'var(--green)',red:'var(--red)',yellow:'var(--yellow)',blue:'var(--accent)',gray:'var(--text3)'};
+  el.innerHTML=logs.map(l=>`<div class="hist-item"><div class="hist-dot" style="background:${cm[l.color]||'var(--text3)'}"></div><div class="hist-content"><div class="hist-action">${l.msg}</div>${l.orderId?`<div class="hist-detail mono" style="font-size:9px">${l.orderId}</div>`:''}</div><div class="hist-time">${fmtD(l.at)}</div></div>`).join('');
+}
+function exportLogCSV(){
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['タイムスタンプ','種別','内容','ID'],...logs.map(l=>[l.at,l.type,l.msg,l.orderId||''])]),'ログ');
+  XLSX.writeFile(wb,`操作ログ_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('↓ ログExcelを出力','blue');
+}
+
+// ════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════
+function loadSettings(){
+  const k=localStorage.getItem('im4_aikey'); if(k) document.getElementById('ai-key').value=k;
+  const wh=localStorage.getItem('im4_webhook'); if(wh) document.getElementById('slack-url').value=wh;
+  const cid=localStorage.getItem('im4_gClientId'); if(cid) document.getElementById('g-client-id').value=cid;
+  document.getElementById('g-folder').value=localStorage.getItem('im4_gFolder')||'請求マスター';
+  document.getElementById('conf-company').value=conf.company||'';
+  document.getElementById('conf-dept').value=conf.dept||'';
+  document.getElementById('conf-bank').value=conf.bank||'';
+  document.getElementById('conf-email').value=conf.email||'';
+}
+function saveAIKey(){
+  const k=document.getElementById('ai-key').value.trim();
+  if(!k.startsWith('sk-')){document.getElementById('ai-status').innerHTML='<span style="color:var(--red)">⚠ APIキーが正しくありません（sk-で始まる）</span>';return;}
+  localStorage.setItem('im4_aikey',k);
+  document.getElementById('ai-status').innerHTML='<span style="color:var(--green)">✓ 保存しました</span>';
+  const b=document.getElementById('badge-ai'); b.className='badge-intg bi-ai'; b.textContent='AI 設定済';
+  toast('✅ APIキーを保存しました','blue');
+}
+async function testAI(){
+  const k=document.getElementById('ai-key').value.trim();
+  if(!k){toast('APIキーを入力してください','yellow');return;}
+  document.getElementById('ai-status').innerHTML='<span style="color:var(--text3)">テスト中…</span>';
+  try{
+    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:50,messages:[{role:'user',content:'hi'}]})});
+    if(r.ok){document.getElementById('ai-status').innerHTML='<span style="color:var(--green)">✓ 接続成功</span>';toast('✅ Claude API接続成功','green');}
+    else{const e=await r.json();document.getElementById('ai-status').innerHTML=`<span style="color:var(--red)">❌ ${e.error?.message||r.status}</span>`;}
+  }catch(e){document.getElementById('ai-status').innerHTML=`<span style="color:var(--red)">❌ ${e.message}</span>`;}
+}
+function saveWebhook(){
+  const url=document.getElementById('slack-url').value.trim();
+  if(!url.startsWith('https://hooks.slack.com/')){document.getElementById('slack-status').innerHTML='<span style="color:var(--red)">⚠ URLが正しくありません</span>';return;}
+  localStorage.setItem('im4_webhook',url);
+  document.getElementById('slack-status').innerHTML='<span style="color:var(--green)">✓ 保存</span>';
+  const b=document.getElementById('badge-slack'); b.className='badge-intg bi-slack'; b.textContent='Slack 設定済';
+  toast('✅ Webhook URLを保存','green');
+}
+async function testWebhook(){
+  const url=document.getElementById('slack-url').value.trim();
+  if(!url)return;
+  try{await fetch(url,{method:'POST',body:JSON.stringify({text:'🧪 請求マスターv4 テスト通知'})});toast('📤 テスト送信完了','green');}
+  catch(e){toast('❌ 送信失敗','red');}
+}
+function saveGConf(){
+  localStorage.setItem('im4_gClientId',document.getElementById('g-client-id').value.trim());
+  localStorage.setItem('im4_gFolder',document.getElementById('g-folder').value.trim()||'請求マスター');
+  document.getElementById('drive-conf-status').innerHTML='<span style="color:var(--green)">✓ 保存しました。「接続テスト」で確認してください。</span>';
+  toast('✅ Drive設定を保存','green');
+}
+function saveCompanyConf(){
+  conf={company:document.getElementById('conf-company').value,dept:document.getElementById('conf-dept').value,bank:document.getElementById('conf-bank').value,email:document.getElementById('conf-email').value};
+  localStorage.setItem('im4_conf',JSON.stringify(conf));
+  toast('✅ 会社情報を保存','green');
+}
+
+// ════════════════════════════════════
+// UTILS
+// ════════════════════════════════════
+function fmtY(n){if(n===null||n===undefined||isNaN(n))return'—';return'¥'+Math.round(n).toLocaleString();}
+function fmtD(iso){if(!iso)return'—';const d=new Date(iso);return`${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function chip(label,type){const map={g:'ch-g',y:'ch-y',r:'ch-r',b:'ch-b',gray:'ch-gray',slack:'ch-slack',drive:'ch-drive',ai:'ch-ai'};return`<span class="chip ${map[type]||'ch-gray'}">${label}</span>`;}
+function toast(msg,type){
+  const cm={green:'var(--green)',red:'var(--red)',yellow:'var(--yellow)',blue:'var(--drive)',gray:'var(--text3)'};
+  const t=document.createElement('div'); t.className='toast';
+  t.style.borderLeftColor=cm[type]||'var(--border2)';
+  t.innerHTML=`<span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(()=>t.remove(),3200);
+}
+
+// ════════════════════════════════════
+// INIT
+// ════════════════════════════════════
+renderDashboard();
+if(localStorage.getItem('im4_aikey')){const b=document.getElementById('badge-ai');b.className='badge-intg bi-ai';b.textContent='AI 設定済';}
+if(localStorage.getItem('im4_webhook')){const b=document.getElementById('badge-slack');b.className='badge-intg bi-slack';b.textContent='Slack 設定済';}
+</script>
+</body>
+</html>
